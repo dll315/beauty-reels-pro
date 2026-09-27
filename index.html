@@ -567,7 +567,9 @@ body.playing .glow{ opacity:.42; }
   }
   function startBuffer(slot) {
     slot.preload = "auto";
-    if (slot.src) { try { slot.load(); } catch (e) {} }
+    // 直连模式 src 是 API 随机地址，load() 会重新 302 随机到另一条——
+    // 只改 preload 让浏览器续传当前已 302 好的资源；服务端模式是固定直链，load() 幂等无害
+    if (slot.src && !noSrv) { try { slot.load(); } catch (e) {} }
   }
 
   /* ==================== 画质档位 / API ==================== */
@@ -609,9 +611,10 @@ body.playing .glow{ opacity:.42; }
   }
 
   /* ---------- 直连模式（GitHub Pages 等纯静态托管，无 server.py） ----------
-     yujn API 不带 type=json 时直接 302 跳转视频直链，<video> 跟随重定向
-     不受 CORS 限制；播放后 video.currentSrc 即为真实直链（DOM 属性不受限），
-     用于去重/收藏/历史。死链靠 video error 事件换源重试。 */
+     yujn API 不带 type=json 时直接 302 跳转视频，<video> 跟随重定向播放，
+     不受 CORS 限制。注意：浏览器不暴露 302 后的真实直链（currentSrc 不跟随
+     重定向），因此直连模式天然拿不到直链——src 保持 API 地址即可，切勿
+     回写（同值赋 src 会触发重新随机）。去重/历史语义降级为“该源再来一条”。 */
   function directResolve(slot, autoLoad) {
     return new Promise(function (res) {
       var myStamp = ++stampSeq;
@@ -624,19 +627,9 @@ body.playing .glow{ opacity:.42; }
         var onMeta = function () {
           cleanup();
           if (slot._stamp !== myStamp) { res(false); return; }
-          var real = slot.currentSrc || "";
-          if (!real || isSeen(real) || sameAsSlots(real, slot)) { attempt(); return; }
-          slot._directUrl = real;
+          // 元数据到手即视为可播；src 保持 API 地址不动
           slotData[slots.indexOf(slot)] = { epn: ep.name, meta: null };
-          // 关键：把 src 从“API 随机地址”换成“固定直链”——否则 startBuffer/load 会
-          // 重新 302 随机跳到另一条视频，去重白做、回看也会丢内容
-          if (!autoLoad) {
-            try { slot.pause(); } catch (e) {}
-            slot.preload = "none";
-            slot.src = real;      // preload=none，不会真正加载
-          } else {
-            slot.src = real;      // 同一资源，浏览器缓存命中，几乎无感
-          }
+          if (!autoLoad) { try { slot.pause(); } catch (e) {} slot.preload = "none"; }
           res(true);
         };
         var onErr = function () {
@@ -647,14 +640,10 @@ body.playing .glow{ opacity:.42; }
         };
         var cleanup = function () {
           slot.removeEventListener("loadedmetadata", onMeta);
-          slot.removeEventListener("loadeddata", onMeta);
           slot.removeEventListener("error", onErr);
         };
-        // loadedmetadata 时 currentSrc 已是 302 后的最终直链，比 loadeddata 更早更稳
         slot.addEventListener("loadedmetadata", onMeta);
-        slot.addEventListener("loadeddata", onMeta);
         slot.addEventListener("error", onErr);
-        slot._directUrl = null;
         slot.preload = autoLoad ? "auto" : "metadata";
         slot.src = ep.u + (ep.u.indexOf("?") > -1 ? "&" : "?") + "_r=" + Date.now() + Math.floor(Math.random() * 1e6);
         try { slot.load(); } catch (e) {}
@@ -880,31 +869,34 @@ body.playing .glow{ opacity:.42; }
     curEpn = ""; curMeta = null; curUrl = "";
     $("vMeta").innerHTML = '<span>解析中…</span>';
 
-    if (nx.src && nx.src !== wasActive.src) {
-      // 预载已完成且与当前播放不重复 → 直接播放
-      startBuffer(nx);
-      activate(nx);
-      animateIn(nx);
-      if (wasActive.src && wasIdx !== cur) histRecordFor(wasIdx);
-    } else if (nx._pending) {
-      // 预载解析进行中（快速连点场景）→ 等它完成，而不是用旧 src
+    if (nx._pending) {
+      // 预载解析进行中 → 等它完成。直连模式下 directResolve 一开始就设了 src（API 地址），
+      // 必须先等 promise 落定（src 被换成固定直链），否则 startBuffer 会对 API 地址重新随机
       nx._pending.then(function (ok) {
         if (nx !== active()) return;
-        if (ok && nx.src && nx.src !== wasActive.src) {
+        if (ok && slotRealUrl(nx) && slotRealUrl(nx) !== slotRealUrl(wasActive)) {
           startBuffer(nx); activate(nx); animateIn(nx);
           if (wasActive.src && wasIdx !== cur) histRecordFor(wasIdx);
         } else {
-          // 预载失败或结果重复 → 当场重新解析
-          resolveSlot(nx, true).then(function (ok2) {
+          // 预载失败或结果重复 → 当场重新解析（挂 _pending 防后续 forward 乱用）
+          nx._pending = resolveSlot(nx, true).then(function (ok2) {
+            nx._pending = null;
             if (nx !== active()) return;
             if (ok2) { activate(nx); animateIn(nx); }
             else handleError();
           });
         }
       });
+    } else if (nx.src && slotRealUrl(nx) !== slotRealUrl(wasActive)) {
+      // 预载已完成且与当前播放不重复 → 直接播放
+      startBuffer(nx);
+      activate(nx);
+      animateIn(nx);
+      if (wasActive.src && wasIdx !== cur) histRecordFor(wasIdx);
     } else {
-      // 槽位为空 → 当场解析
-      resolveSlot(nx, true).then(function (ok) {
+      // 槽位为空 → 当场解析（挂 _pending 防后续 forward 乱用）
+      nx._pending = resolveSlot(nx, true).then(function (ok) {
+        nx._pending = null;
         if (nx !== active()) return;   // 用户已切走，丢弃
         if (ok) { activate(nx); animateIn(nx); }
         else handleError();

@@ -19,10 +19,12 @@
 
 ## 打开方式
 
-**推荐：双击 `启动网站.bat`**（完整功能：收藏 / 历史 / 下载 / 原始信息解析）
+**在线体验（GitHub Pages 直连模式）**：https://dailong.me/beauty-reels-pro/
+
+**本地完整功能：双击 `启动网站.bat`**（收藏 / 历史 / 精确下载 / 码率择优）
 自动启动本地服务并打开浏览器（http://127.0.0.1:8899）。
 
-直接双击 `index.html` 也能看（直连模式），但收藏 / 下载需要解析视频直链，会提示先启动本地服务。
+直接双击 `index.html` 也能看（直连模式：302 跳转随机播放，无择优）。
 
 ## 功能
 
@@ -45,34 +47,19 @@
 
 ## 部署
 
-支持 **Docker**、**本地 Windows 常驻**、**纯静态托管（受限模式）**。
-
-### Docker
+支持 **docker run**、**docker compose**、**GitHub Pages（直连模式）**、**本地常驻** 四种方式，完整命令与环境变量见 **[DEPLOY.md](DEPLOY.md)**。
 
 ```bash
-git clone <本仓库> && cd girl-pro
-docker compose up -d --build        # 访问 http://IP:8899
+# docker run（源码构建）
+git clone https://github.com/dll315/beauty-reels-pro.git && cd beauty-reels-pro
+docker build -t girl-pro .
+docker run -d --name girl-pro -p 8899:8899 -e ACCESS_TOKEN=你的口令 --restart unless-stopped girl-pro
 
-# 换端口
-docker run -d -p 9000:8899 girl-pro
-docker run -d -p 9000:9000 -e PORT=9000 girl-pro
+# docker compose
+docker compose up -d --build
 ```
 
-### 本地常驻（Windows）
-
-双击 `启动网站.bat`，或：
-
-```bash
-python server.py            # 默认 127.0.0.1:8899
-python server.py --port 9000 --no-open
-```
-
-### 公网部署口令保护
-
-```bash
-python server.py --token 你的口令     # 或设环境变量 ACCESS_TOKEN
-```
-前端需在浏览器控制台设置：`localStorage.setItem("xjjpro_key", "你的口令")`。
+**GitHub Pages**：fork 后 Settings → Pages → Source 选 `main` 根目录即可（直连模式，无择优）。
 
 ## 服务端可调环境变量
 
