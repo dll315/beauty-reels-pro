@@ -547,11 +547,16 @@ body.playing .glow{ opacity:.42; }
     LS.set("xjjpro_seen", seen);
   }
   function isSeen(u) { return seen.indexOf(u) > -1; }
-  function sameAsSlots(u) { return slots.some(function (s) { return s.src === u; }); }
+  // 槽位的“真实直链”：直连模式下 src 是 API 地址，_directUrl 才是 302 后的直链
+  function slotRealUrl(s) { return s._directUrl || s.src; }
+  function sameAsSlots(u, except) {
+    return slots.some(function (s) { return s !== except && slotRealUrl(s) === u; });
+  }
 
   /* ==================== 槽位应用 ==================== */
   function apply(slot, url, epn, meta) {
     slot.src = url;
+    slot._directUrl = null;   // 显式赋值即真实地址（服务端直链/回放），清掉直连标记
     slot.loop = true;
     // 新填的槽位默认静音（除非它就是即将播放的 active），杜绝串音
     slot.muted = (slot === active()) ? desiredMute() : true;
@@ -589,7 +594,7 @@ body.playing .glow{ opacity:.42; }
   /* ==================== 解析（Promise 风格 + 版本戳防串槽） ==================== */
   var stampSeq = 0;
   function resolveSlot(slot, autoLoad) {
-    // 每次解析打一个递增戳；若解析未返回时槽位被再次征用（戳变了），结果作废
+    if (noSrv) return directResolve(slot, autoLoad);   // Pages/直连模式
     var myStamp = ++stampSeq;
     slot._stamp = myStamp;
     return new Promise(function (res) {
@@ -600,6 +605,60 @@ body.playing .glow{ opacity:.42; }
         return;
       }
       yujn(slot, autoLoad, myStamp, doneWrap);
+    });
+  }
+
+  /* ---------- 直连模式（GitHub Pages 等纯静态托管，无 server.py） ----------
+     yujn API 不带 type=json 时直接 302 跳转视频直链，<video> 跟随重定向
+     不受 CORS 限制；播放后 video.currentSrc 即为真实直链（DOM 属性不受限），
+     用于去重/收藏/历史。死链靠 video error 事件换源重试。 */
+  function directResolve(slot, autoLoad) {
+    return new Promise(function (res) {
+      var myStamp = ++stampSeq;
+      slot._stamp = myStamp;
+      var tries = 0;
+      (function attempt() {
+        if (slot._stamp !== myStamp) { res(false); return; }
+        if (tries++ >= 6) { res(false); return; }
+        var ep = pickEp();
+        var onMeta = function () {
+          cleanup();
+          if (slot._stamp !== myStamp) { res(false); return; }
+          var real = slot.currentSrc || "";
+          if (!real || isSeen(real) || sameAsSlots(real, slot)) { attempt(); return; }
+          slot._directUrl = real;
+          slotData[slots.indexOf(slot)] = { epn: ep.name, meta: null };
+          // 关键：把 src 从“API 随机地址”换成“固定直链”——否则 startBuffer/load 会
+          // 重新 302 随机跳到另一条视频，去重白做、回看也会丢内容
+          if (!autoLoad) {
+            try { slot.pause(); } catch (e) {}
+            slot.preload = "none";
+            slot.src = real;      // preload=none，不会真正加载
+          } else {
+            slot.src = real;      // 同一资源，浏览器缓存命中，几乎无感
+          }
+          res(true);
+        };
+        var onErr = function () {
+          cleanup();
+          if (slot._stamp !== myStamp) { res(false); return; }
+          noteFail(ep.name);
+          attempt();
+        };
+        var cleanup = function () {
+          slot.removeEventListener("loadedmetadata", onMeta);
+          slot.removeEventListener("loadeddata", onMeta);
+          slot.removeEventListener("error", onErr);
+        };
+        // loadedmetadata 时 currentSrc 已是 302 后的最终直链，比 loadeddata 更早更稳
+        slot.addEventListener("loadedmetadata", onMeta);
+        slot.addEventListener("loadeddata", onMeta);
+        slot.addEventListener("error", onErr);
+        slot._directUrl = null;
+        slot.preload = autoLoad ? "auto" : "metadata";
+        slot.src = ep.u + (ep.u.indexOf("?") > -1 ? "&" : "?") + "_r=" + Date.now() + Math.floor(Math.random() * 1e6);
+        try { slot.load(); } catch (e) {}
+      })();
     });
   }
   function yujn(slot, autoLoad, myStamp, res) {
@@ -724,7 +783,7 @@ body.playing .glow{ opacity:.42; }
     spinner.classList.add("hidden");
     shim.classList.add("hidden");
     $("errMsg").textContent = noSrv
-      ? "未检测到本地服务。直接打开文件仅能预览；收藏/下载/择优需运行 server.py。"
+      ? "连续多次解析失败。当前为直连模式（无本地服务），请检查网络后重试。"
       : "连续多次解析失败，请检查网络后重试。";
     $("errMask").classList.remove("hidden");
   }
@@ -778,6 +837,12 @@ body.playing .glow{ opacity:.42; }
   }
   function doDownload() {
     if (!curUrl) { toastMsg("还没加载出视频"); return; }
+    if (noSrv) {
+      // 直连模式：跨域直链无法 fetch 拉流，改为新窗口打开（可右键另存）
+      window.open(curUrl, "_blank");
+      toastMsg("已打开直链，右键可另存");
+      return;
+    }
     var a = document.createElement("a");
     a.href = curUrl;
     a.download = "小姐姐视频_" + new Date().toISOString().slice(0, 10) + ".mp4";
@@ -855,16 +920,17 @@ body.playing .glow{ opacity:.42; }
     var d = slotData[i] || {};
     curEpn = d.epn || "随机";
     curMeta = d.meta || null;
-    curUrl = el.src;
-    markSeen(el.src);            // 真正播放时记录去重
+    curUrl = slotRealUrl(el);          // 直连模式下取 302 后的真实直链
+    markSeen(curUrl);                  // 真正播放时记录去重
     updateMeta();
     tryPlay();
   }
 
   function histRecordFor(idx) {
     var d = slotData[idx];
-    if (!d || !slots[idx].src) return;
-    hist.unshift({ u: slots[idx].src, epn: d.epn, meta: d.meta, t: Date.now() });
+    var u = slotRealUrl(slots[idx]);
+    if (!d || !u) return;
+    hist.unshift({ u: u, epn: d.epn, meta: d.meta, t: Date.now() });
     if (hist.length > 100) hist.length = 100;
     saveHist();
     $("watchCount").textContent = "已看 " + hist.length;
@@ -898,6 +964,7 @@ body.playing .glow{ opacity:.42; }
     // 不复用旧 src —— 这是打破“仅有三个视频循环”的核心。
     var idx = slots.indexOf(nx);
     nx._lastTime = 0;
+    nx._directUrl = null;
     slotData[idx] = null;
     if (nx.src) {
       try { nx.pause(); } catch (e) {}
@@ -1234,12 +1301,13 @@ body.playing .glow{ opacity:.42; }
     updateLikeUI();
     requestAnimationFrame(guardFrame);
 
+    // 先探测本地服务，再播第一条——Pages/纯静态托管下 /api/health 404，
+    // noSrv=true 走直连模式（302 跳转）；有 server.py 则走择优模式
     fetch(apiUrl("/api/health"))
       .then(function (r) { return r.json(); })
       .then(function (d) { noSrv = !(d && d.ok); })
-      .catch(function () { noSrv = true; });
-
-    forward();
+      .catch(function () { noSrv = true; })
+      .then(function () { forward(); });
   }
 
   init();
