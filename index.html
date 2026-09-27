@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>小姐姐放映厅 Pro · 随机短视频</title>
+<meta name="theme-color" content="#0a0a12">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff5e9c'/%3E%3Cstop offset='1' stop-color='%238a7dff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath fill='url(%23g)' d='M12 21s-7.5-4.9-10-9.2C.4 8.6 2 5 5.5 5c2 0 3.4 1.1 4.2 2.4L12 10l2.3-2.6C15.1 6.1 16.5 5 18.5 5 22 5 23.6 8.6 22 11.8 19.5 16.1 12 21 12 21z'/%3E%3C/svg%3E">
+<style>
+:root{
+  --accent1:#ff5e9c; --accent2:#8a7dff; --accent3:#4ade80;
+  --text:#f3f3f8; --dim:rgba(255,255,255,.55);
+  --glass:rgba(255,255,255,.08); --glass-bd:rgba(255,255,255,.14);
+  --danger:#ff7b7b;
+}
+*{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{ height:100%; }
+body{
+  background:#0a0a12; color:var(--text);
+  font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  overflow:hidden; display:flex; flex-direction:column; user-select:none;
+  -webkit-font-smoothing:antialiased;
+}
+.hidden{ display:none !important; }
+
+/* ============ 背景光效（零 filter 开销，帧率守护可降级关闭） ============ */
+.bg{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+.glow{ position:absolute; border-radius:50%; opacity:.5; }
+.glow-1{ width:64vw; height:64vw; left:-20vw; top:-22vw;
+  background:radial-gradient(circle closest-side, rgba(255,94,156,.34), rgba(255,94,156,.12) 46%, rgba(255,94,156,0) 72%); }
+.glow-2{ width:68vw; height:68vw; right:-22vw; bottom:-26vw;
+  background:radial-gradient(circle closest-side, rgba(138,125,255,.28), rgba(138,125,255,.10) 46%, rgba(138,125,255,0) 72%); }
+.glow-3{ width:40vw; height:40vw; left:30vw; top:30vh; opacity:.22;
+  background:radial-gradient(circle closest-side, rgba(74,222,128,.30), rgba(74,222,128,.08) 50%, rgba(74,222,128,0) 75%); }
+
+/* ============ 顶栏 ============ */
+.topbar{ position:relative; z-index:20; display:flex; align-items:center; justify-content:space-between;
+  padding:calc(12px + env(safe-area-inset-top)) 18px 6px; flex:0 0 auto; gap:10px; }
+.brand{ display:flex; align-items:center; gap:10px; min-width:0; cursor:pointer; }
+.brand-mark{ width:34px; height:34px; border-radius:11px; flex:none; display:grid; place-items:center;
+  background:linear-gradient(135deg,var(--accent1),var(--accent2));
+  box-shadow:0 4px 16px rgba(255,94,156,.4); }
+.brand-mark svg{ width:19px; height:19px; fill:#fff; }
+.brand-text{ display:flex; flex-direction:column; line-height:1.15; }
+.brand-name{ font-size:16px; font-weight:700; letter-spacing:.5px;
+  background:linear-gradient(90deg,#fff,#ffd3e8); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+.brand-sub{ font-size:10.5px; color:var(--dim); letter-spacing:2px; }
+.top-actions{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+.chip{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text);
+  background:var(--glass); border:1px solid var(--glass-bd);
+  border-radius:999px; padding:6px 13px; backdrop-filter:blur(10px); white-space:nowrap; cursor:pointer; transition:.2s; }
+.chip:hover{ background:rgba(255,255,255,.16); }
+.chip-live{ color:#ffd3e8; border-color:rgba(255,94,156,.45); cursor:default;
+  background:linear-gradient(90deg,rgba(255,94,156,.16),rgba(138,125,255,.16)); }
+.chip-live .dot{ width:6px; height:6px; border-radius:50%; background:#4ade80;
+  box-shadow:0 0 6px #4ade80; animation:blink 1.6s infinite; }
+@keyframes blink{ 50%{ opacity:.35; } }
+.chip-dim{ color:var(--dim); cursor:default; }
+
+/* ============ 播放区 ============ */
+.stage{ position:relative; z-index:2; flex:1 1 auto; min-height:0;
+  display:flex; align-items:center; justify-content:center; padding:4px 12px; }
+.card{
+  position:relative; height:100%; max-width:100%; aspect-ratio:9/16;
+  border-radius:26px; overflow:hidden; background:#131320;
+  box-shadow:0 24px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.07);
+  cursor:pointer; touch-action:none;
+  isolation:isolate;
+}
+.shimmer{ position:absolute; inset:0; z-index:1;
+  background:linear-gradient(110deg,#141a30 30%,#232c4d 50%,#141a30 70%);
+  background-size:220% 100%; animation:sh 2s linear infinite; }
+@keyframes sh{ from{ background-position:120% 0; } to{ background-position:-120% 0; } }
+
+.player{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000;
+  transition:opacity .32s ease, transform .4s cubic-bezier(.22,.9,.3,1), filter .32s ease; }
+.player.pre{ opacity:0; transform:translateY(30px) scale(.96); filter:blur(6px); }
+.player.land{ object-fit:contain; }
+.player.off{ display:none; }
+
+/* 顶部渐隐遮罩，提升信息可读性 */
+.card .scrim-top{ position:absolute; z-index:4; inset:0 0 auto 0; height:110px; pointer-events:none;
+  background:linear-gradient(rgba(0,0,0,.5), transparent); }
+.card .scrim-bottom{ position:absolute; z-index:4; inset:auto 0 0 0; height:200px; pointer-events:none;
+  background:linear-gradient(transparent, rgba(0,0,0,.62)); }
+
+.spinner{ position:absolute; inset:0; z-index:6; display:grid; place-items:center; pointer-events:none; }
+.ring{ width:46px; height:46px; border-radius:50%; border:3px solid rgba(255,255,255,.18);
+  border-top-color:var(--accent1); animation:spin .8s linear infinite; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+.play-badge{ position:absolute; z-index:7; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:72px; height:72px; border-radius:50%; background:rgba(0,0,0,.5);
+  display:grid; place-items:center; border:1px solid rgba(255,255,255,.22);
+  box-shadow:0 0 40px rgba(255,94,156,.35); animation:pop .2s ease-out; }
+.play-badge svg{ width:34px; height:34px; fill:#fff; margin-left:4px; }
+@keyframes pop{ from{ transform:translate(-50%,-50%) scale(.6); opacity:0; } }
+
+.edge-top{ position:absolute; z-index:8; top:12px; left:12px; right:12px;
+  display:flex; align-items:center; justify-content:space-between; pointer-events:none; }
+.edge-top > *{ pointer-events:auto; }
+.stag{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:#fff;
+  background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.25); border-radius:999px; padding:4px 11px; }
+.stag.hd{ color:#c9ffe2; background:rgba(10,52,34,.8); border-color:rgba(110,255,180,.45); letter-spacing:.06em; }
+.icon-btn{ width:36px; height:36px; border-radius:50%; border:1px solid rgba(255,255,255,.25);
+  background:rgba(0,0,0,.5); cursor:pointer; display:grid; place-items:center;
+  backdrop-filter:blur(6px); transition:.18s; }
+.icon-btn:active{ transform:scale(.9); }
+.icon-btn svg{ width:19px; height:19px; fill:#fff; }
+
+/* ============ 右侧操作栏 ============ */
+.rail{ position:absolute; z-index:8; right:10px; bottom:100px;
+  display:flex; flex-direction:column; align-items:center; gap:16px; }
+.rail-btn{ display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; }
+.rail-btn .ic{ width:48px; height:48px; border-radius:50%; display:grid; place-items:center;
+  background:rgba(0,0,0,.4); border:1px solid rgba(255,255,255,.2); backdrop-filter:blur(6px);
+  transition:.18s; }
+.rail-btn .ic svg{ width:24px; height:24px; fill:#fff; }
+.rail-btn .lb{ font-size:10px; color:rgba(255,255,255,.85); text-shadow:0 1px 4px rgba(0,0,0,.8); }
+.rail-btn:active .ic{ transform:scale(.88); }
+.rail-btn.liked .ic{ background:linear-gradient(135deg,#ff5e9c,#ff2d6f); border-color:transparent; }
+.rail-btn.faved .ic{ background:linear-gradient(135deg,#ffb347,#ff5e9c); border-color:transparent; }
+
+/* 点赞飘心 */
+.float-heart{ position:absolute; z-index:9; pointer-events:none; animation:fup 1.1s ease-out forwards; }
+@keyframes fup{ from{ transform:translateY(0) scale(.8); opacity:1; }
+  to{ transform:translateY(-120px) scale(1.7); opacity:0; } }
+
+/* ============ 信息区 ============ */
+.info{ position:absolute; z-index:8; left:14px; right:70px; bottom:18px; pointer-events:none; }
+.v-title{ font-size:16px; font-weight:700; margin-bottom:6px; text-shadow:0 2px 12px rgba(0,0,0,.75); }
+.v-tags{ display:flex; flex-wrap:wrap; gap:6px; }
+.v-tags i{ font-style:normal; font-size:11px; color:#ffd9ea; background:rgba(90,20,48,.6);
+  border:1px solid rgba(255,94,156,.4); padding:2px 9px; border-radius:999px; }
+.v-meta{ margin-top:7px; font-size:11px; color:var(--dim); text-shadow:0 1px 6px rgba(0,0,0,.8); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.v-meta .badge{ display:inline-flex; align-items:center; gap:3px; font-size:10px; padding:1px 7px;
+  border-radius:5px; background:rgba(255,255,255,.12); color:#e8e8f0; }
+.v-meta .badge.q{ background:rgba(74,222,128,.16); color:#b9ffd6; border:1px solid rgba(74,222,128,.35); }
+
+/* 进度条 */
+.progress-wrap{ position:absolute; z-index:9; left:0; right:0; bottom:0; height:16px;
+  display:flex; align-items:flex-end; cursor:pointer; }
+.progress-bar{ height:3px; width:100%; transform:scaleX(0); transform-origin:left center;
+  background:linear-gradient(90deg,var(--accent1),var(--accent2));
+  border-radius:0 2px 2px 0; box-shadow:0 0 10px rgba(255,94,156,.6); transition:height .15s; }
+.progress-wrap:hover .progress-bar{ height:6px; }
+
+/* ============ 底部功能栏 ============ */
+.toolbar{ position:relative; z-index:20; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom)); flex-wrap:wrap; }
+.tbtn{ display:flex; flex-direction:column; align-items:center; gap:3px; min-width:62px;
+  background:var(--glass); border:1px solid var(--glass-bd); border-radius:16px;
+  padding:8px 12px 6px; cursor:pointer; color:var(--text); transition:.18s; backdrop-filter:blur(10px); }
+.tbtn:hover{ background:rgba(255,255,255,.15); transform:translateY(-2px); }
+.tbtn:active{ transform:scale(.94); }
+.tbtn svg{ width:20px; height:20px; fill:currentColor; }
+.tbtn span{ font-size:10.5px; letter-spacing:.08em; color:rgba(255,255,255,.75); }
+.tbtn.accent{ background:linear-gradient(135deg,rgba(255,94,156,.85),rgba(138,125,255,.85)); border-color:transparent;
+  box-shadow:0 6px 20px rgba(255,94,156,.35); }
+.tbtn.accent:hover{ background:linear-gradient(135deg,#ff5e9c,#8a7dff); }
+.tbtn.on{ color:#ffd3e8; border-color:rgba(255,94,156,.6); background:rgba(255,94,156,.15); }
+.tbtn.pulse{ animation:tpulse .35s; }
+@keyframes tpulse{ 40%{ transform:scale(1.12); } }
+
+.footbar{ position:relative; z-index:20; flex:0 0 auto; text-align:center; font-size:10.5px;
+  color:rgba(255,255,255,.3); padding:0 12px 7px; letter-spacing:1px; }
+
+/* ============ 帧率守护：掉帧时关闭装饰 ============ */
+body.lite .bg{ display:none; }
+body.lite .card{ box-shadow:0 12px 44px rgba(0,0,0,.5); }
+body.lite .player{ transition:opacity .12s ease; }
+body.lite .card .scrim-top, body.lite .card .scrim-bottom{ display:none; }
+body.lite .rail-btn .ic{ backdrop-filter:none; }
+body.playing .glow{ opacity:.42; }
+
+/* ============ 面板 ============ */
+.mask{ position:fixed; inset:0; z-index:100; background:rgba(5,5,12,.9);
+  display:flex; align-items:flex-end; justify-content:center; animation:fade .22s;
+  backdrop-filter:blur(4px); }
+@keyframes fade{ from{ opacity:0; } }
+.panel{ width:min(520px,100%); max-height:84dvh; display:flex; flex-direction:column; overflow:hidden;
+  background:#14141f; border:1px solid rgba(255,255,255,.1); border-radius:24px 24px 0 0;
+  padding:18px 20px 20px; animation:up .32s cubic-bezier(.2,.9,.3,1); }
+@keyframes up{ from{ transform:translateY(70px); opacity:0; } }
+.phead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex:0 0 auto; }
+.phead h2{ font-size:16px; font-weight:700; }
+.phead h2 small{ margin-left:8px; font-size:12px; font-weight:400; color:var(--dim); }
+.xbtn{ width:32px; height:32px; border-radius:50%; border:none; cursor:pointer;
+  background:var(--glass); color:#fff; font-size:14px; }
+.xbtn:hover{ background:rgba(255,255,255,.18); }
+.plist{ flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; min-height:120px; }
+.plist::-webkit-scrollbar{ width:5px; }
+.plist::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.14); border-radius:4px; }
+.empty{ text-align:center; color:var(--dim); font-size:13px; padding:32px 0; line-height:1.9; }
+
+.item{ display:flex; gap:12px; background:var(--glass); border:1px solid var(--glass-bd);
+  border-radius:14px; padding:10px; cursor:pointer; transition:background .2s; }
+.item:hover{ background:rgba(255,255,255,.1); }
+.item .th{ width:64px; height:96px; border-radius:9px; object-fit:cover; flex:none;
+  background:linear-gradient(135deg,#1c2340,#10152b); }
+.item .meta{ flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; font-size:12px; }
+.item .l1{ font-weight:600; color:#ffe9f1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.item .l2{ color:var(--dim); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.item .ops{ display:flex; gap:6px; margin-top:5px; flex-wrap:wrap; }
+.item .ops a, .item .ops button{ font-size:11px; color:#ffd3e8; background:rgba(255,94,156,.12);
+  border:1px solid rgba(255,94,156,.35); border-radius:999px; padding:2px 10px; cursor:pointer; text-decoration:none; }
+.item .ops a:hover, .item .ops button:hover{ background:rgba(255,94,156,.25); }
+.item .ops .del{ color:#ffb4b4; border-color:rgba(255,120,120,.4); background:rgba(255,120,120,.08); }
+.pfoot{ flex:0 0 auto; margin-top:12px; display:flex; justify-content:space-between; align-items:center; }
+.pfoot .hint{ font-size:11px; color:var(--dim); }
+.clearbtn{ font-size:11px; color:#ffb4b4; background:rgba(255,120,120,.08);
+  border:1px solid rgba(255,120,120,.4); border-radius:999px; padding:5px 13px; cursor:pointer; }
+
+/* 账号面板 */
+.acct-row{ display:flex; gap:10px; margin-bottom:14px; }
+.acct-row input{ flex:1; background:rgba(255,255,255,.06); border:1px solid var(--glass-bd);
+  border-radius:12px; padding:11px 14px; color:#fff; font-size:14px; outline:none; font-family:inherit; }
+.acct-row input:focus{ border-color:rgba(255,94,156,.6); }
+.go{ border:none; cursor:pointer; border-radius:12px; padding:11px 20px; font-size:13px; font-weight:600; color:#fff;
+  background:linear-gradient(90deg,var(--accent1),var(--accent2)); transition:.18s; }
+.go:active{ transform:scale(.96); }
+.acct-list{ display:flex; flex-wrap:wrap; gap:8px; }
+.acct-pill{ font-size:13px; padding:7px 16px; border-radius:999px; cursor:pointer;
+  background:var(--glass); border:1px solid var(--glass-bd); color:var(--text); transition:.18s; }
+.acct-pill:hover{ background:rgba(255,255,255,.15); }
+.acct-pill.on{ color:#ffd3e8; border-color:rgba(255,94,156,.6); background:rgba(255,94,156,.15); }
+.acct-note{ font-size:11px; color:var(--dim); margin-top:12px; line-height:1.8; }
+
+.toast{ position:fixed; z-index:200; left:50%; bottom:90px; transform:translate(-50%,20px);
+  background:rgba(20,20,32,.96); border:1px solid rgba(255,255,255,.16); color:#fff; font-size:13px;
+  padding:11px 20px; border-radius:999px; opacity:0; pointer-events:none; transition:.25s;
+  max-width:84vw; text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+.toast.on{ opacity:1; transform:translate(-50%,0); }
+
+.mask.center{ align-items:center; }
+.errbox{ width:min(400px,88vw); background:#14141f; border:1px solid rgba(255,255,255,.1);
+  border-radius:22px; padding:28px 24px; text-align:center; }
+.errbox h2{ font-size:18px; margin-bottom:8px; }
+.errbox p{ font-size:12.5px; color:var(--dim); line-height:1.7; margin-bottom:18px; }
+.retry{ border:none; cursor:pointer; border-radius:999px; padding:11px 32px; font-size:14px; font-weight:600; color:#fff;
+  background:linear-gradient(90deg,var(--accent1),var(--accent2)); }
+
+/* ============ 手机适配 ============ */
+@media (max-width:640px){
+  .topbar{ padding:calc(10px + env(safe-area-inset-top)) 12px 4px; }
+  .brand-sub{ display:none; }
+  .brand-name{ font-size:15px; }
+  .stage{ padding:2px 0 0; }
+  .card{ width:100%; max-width:none; height:100%; aspect-ratio:auto; border-radius:0; box-shadow:none; }
+  .rail{ right:8px; bottom:96px; gap:14px; }
+  .rail-btn .ic{ width:46px; height:46px; }
+  .rail-btn .ic svg{ width:22px; height:22px; }
+  .info{ left:12px; right:64px; bottom:18px; }
+  .v-title{ font-size:15.5px; }
+  .toolbar{ gap:5px; padding:8px 6px calc(8px + env(safe-area-inset-bottom)); background:linear-gradient(transparent, rgba(8,8,16,.72) 34%); }
+  .tbtn{ min-width:54px; padding:8px 5px 6px; border-radius:16px; border-color:transparent; background:rgba(255,255,255,.06); }
+  .tbtn span{ font-size:10px; }
+  .tbtn svg{ width:20px; height:20px; }
+  .footbar{ display:none; }
+}
+</style>
+</head>
+<body>
+<div class="bg">
+  <div class="glow glow-1"></div>
+  <div class="glow glow-2"></div>
+  <div class="glow glow-3"></div>
+</div>
+
+<header class="topbar">
+  <div class="brand" id="brandHome" title="点击刷新">
+    <span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.9-10-9.2C.4 8.6 2 5 5.5 5c2 0 3.4 1.1 4.2 2.4L12 10l2.3-2.6C15.1 6.1 16.5 5 18.5 5 22 5 23.6 8.6 22 11.8 19.5 16.1 12 21 12 21z"/></svg></span>
+    <span class="brand-text">
+      <span class="brand-name">小姐姐放映厅</span>
+      <span class="brand-sub">RANDOM · PRO</span>
+    </span>
+  </div>
+  <div class="top-actions">
+    <span id="acctChip" class="chip" title="登录 / 切换账号">🔒 未登录</span>
+    <span class="chip chip-live"><span class="dot"></span>在线</span>
+    <span id="watchCount" class="chip chip-dim">已看 0</span>
+  </div>
+</header>
+
+<main class="stage">
+  <div id="card" class="card" aria-label="视频播放器">
+    <div class="shimmer" id="shim"></div>
+    <video id="v0" class="player off" playsinline webkit-playsinline loop preload="auto" disablepictureinpicture></video>
+    <video id="v1" class="player off" playsinline webkit-playsinline loop preload="none" disablepictureinpicture></video>
+    <video id="v2" class="player off" playsinline webkit-playsinline loop preload="none" disablepictureinpicture></video>
+    <div class="scrim-top"></div>
+    <div class="scrim-bottom"></div>
+    <div id="spinner" class="spinner"><div class="ring"></div></div>
+    <div id="playBadge" class="play-badge hidden"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg></div>
+    <div class="edge-top">
+      <div>
+        <span id="seqTag" class="stag">#1</span>
+        <span id="hdTag" class="stag hd hidden">HD</span>
+      </div>
+      <button id="btnMute" class="icon-btn" title="声音开关 (M)">
+        <svg id="icoMuted" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zm12.5 3l3-3-1.4-1.4-3 3-3-3L10.7 9l3 3-3 3 1.4 1.4 3-3 3 3 1.4-1.4-3-3z"/></svg>
+        <svg id="icoSound" viewBox="0 0 24 24" class="hidden"><path d="M4 9v6h4l5 4V5L8 9H4zm11.5 3c0-1.8-1-3.3-2.5-4v8c1.5-.7 2.5-2.2 2.5-4zM13 3.2v2.1c2.9.9 5 3.5 5 6.7s-2.1 5.8-5 6.7v2.1c4-.9 7-4.5 7-8.8s-3-7.9-7-8.8z"/></svg>
+      </button>
+    </div>
+
+    <div class="rail">
+      <div class="rail-btn" id="railLike" title="点赞 (L)">
+        <span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.9-10-9.2C.4 8.6 2 5 5.5 5c2 0 3.4 1.1 4.2 2.4L12 10l2.3-2.6C15.1 6.1 16.5 5 18.5 5 22 5 23.6 8.6 22 11.8 19.5 16.1 12 21 12 21z"/></svg></span>
+        <span class="lb">点赞</span>
+      </div>
+      <div class="rail-btn" id="railFav" title="收藏 (F)">
+        <span class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v16.2a.6.6 0 0 1-.9.5L12 17l-6.1 3.7a.6.6 0 0 1-.9-.5V4a1 1 0 0 1 1-1z"/></svg></span>
+        <span class="lb">收藏</span>
+      </div>
+      <div class="rail-btn" id="railDl" title="下载 (D)">
+        <span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v10.2l3.6-3.6L17 11.1 12 16l-5-4.9 1.4-1.5L12 13.2V3zM5 18h14v2H5z"/></svg></span>
+        <span class="lb">下载</span>
+      </div>
+    </div>
+
+    <div class="info">
+      <div class="v-title">小姐姐随机视频</div>
+      <div class="v-tags"><i>#随机推荐</i><i>#小姐姐</i><i>#短视频</i></div>
+      <div class="v-meta" id="vMeta"><span>遇见 API · 抖音快手热门精选</span></div>
+    </div>
+    <div id="progressWrap" class="progress-wrap"><div id="progressBar" class="progress-bar"></div></div>
+  </div>
+</main>
+
+<nav class="toolbar">
+  <button id="tbPrev" class="tbtn" title="回看 (↓)"><svg viewBox="0 0 24 24"><path d="M12 20l1.4-1.4L7.8 13H20v-2H7.8l5.6-5.6L12 4l-8 8z"/></svg><span>回看</span></button>
+  <button id="tbNext" class="tbtn accent" title="换一个 (↑)"><svg viewBox="0 0 24 24"><path d="M12 4l-1.4 1.4L16.2 11H4v2h12.2l-5.6 5.6L12 20l8-8z"/></svg><span>换一个</span></button>
+  <button id="tbLike" class="tbtn" title="点赞 (L)"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.9-10-9.2C.4 8.6 2 5 5.5 5c2 0 3.4 1.1 4.2 2.4L12 10l2.3-2.6C15.1 6.1 16.5 5 18.5 5 22 5 23.6 8.6 22 11.8 19.5 16.1 12 21 12 21z"/></svg><span>点赞</span></button>
+  <button id="tbFav" class="tbtn" title="收藏 (F)"><svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v16.2a.6.6 0 0 1-.9.5L12 17l-6.1 3.7a.6.6 0 0 1-.9-.5V4a1 1 0 0 1 1-1z"/></svg><span>收藏</span></button>
+  <button id="tbHist" class="tbtn" title="历史/收藏 (H)"><svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 1 0 8.95 10h-2.02A7 7 0 1 1 13 5c1.93 0 3.68.78 4.95 2.05L15 10h7V3l-2.64 2.64A8.97 8.97 0 0 0 13 3zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8z"/></svg><span>记录</span></button>
+  <button id="tbDl" class="tbtn" title="下载 (D)"><svg viewBox="0 0 24 24"><path d="M12 3v10.2l3.6-3.6L17 11.1 12 16l-5-4.9 1.4-1.5L12 13.2V3zM5 18h14v2H5z"/></svg><span>下载</span></button>
+</nav>
+
+<footer class="footbar">↑ 下一条 · ↓ 回看 · 空格 暂停 · M 静音 · L 点赞 · F 收藏 · D 下载 · 双击点赞</footer>
+
+<!-- 收藏/历史面板 -->
+<div id="listMask" class="mask hidden">
+  <div class="panel">
+    <div class="phead">
+      <h2>我的记录</h2>
+      <button id="listClose" class="xbtn">✕</button>
+    </div>
+    <div class="acct-list" style="margin-bottom:12px;">
+      <button id="tabFav" class="acct-pill on">❤ 收藏</button>
+      <button id="tabHist" class="acct-pill">🕘 历史</button>
+    </div>
+    <div id="listBody" class="plist"></div>
+    <div class="pfoot">
+      <span class="hint" id="listHint"></span>
+      <button id="listClear" class="clearbtn hidden">清空</button>
+    </div>
+  </div>
+</div>
+
+<!-- 账号面板 -->
+<div id="acctMask" class="mask hidden">
+  <div class="panel" style="max-height:none;">
+    <div class="phead"><h2>账号</h2><button id="acctClose" class="xbtn">✕</button></div>
+    <div id="acctLoggedOut">
+      <div class="acct-row"><input id="acctId" maxlength="16" placeholder="账号 ID（2-16 位）" autocomplete="off"></div>
+      <div class="acct-row"><input id="acctPw" type="password" maxlength="32" placeholder="密码（至少 4 位）"></div>
+      <div class="acct-row">
+        <button id="btnLogin" class="go" style="flex:1;">登 录</button>
+        <button id="btnReg" class="go" style="flex:1;background:rgba(255,255,255,.12);">注册新账号</button>
+      </div>
+      <div id="acctMsg" style="font-size:12px;color:#ffb4b4;min-height:16px;margin:-4px 0 8px;"></div>
+      <div class="acct-note">账号数据纯本地存储，收藏/历史/点赞按账号隔离。密码以 SHA-256 加盐哈希保存，不存明文。</div>
+    </div>
+    <div id="acctLoggedIn" class="hidden">
+      <div style="font-size:14px;margin-bottom:14px;">当前账号：<b id="acctWho" style="color:#ffd3e8;"></b></div>
+      <button id="btnLogout" class="clearbtn">退出登录</button>
+      <div class="acct-note">收藏、历史、点赞都已按该账号保存。退出后数据保留，重新登录即可继续使用。</div>
+    </div>
+    <div class="acct-row" style="margin-top:18px;">
+      <div style="font-size:13px;color:var(--dim);margin-bottom:2px;">画质档位</div>
+    </div>
+    <div id="qtierRow" class="acct-list"></div>
+    <div style="font-size:12px;color:var(--dim);margin:14px 0 10px;">抖音近期源（可选增强）</div>
+    <div class="acct-row">
+      <input id="dyToken" placeholder="粘贴 istero Token（留空关闭）" autocomplete="off">
+      <button id="dyTokSave" class="go">保存</button>
+    </div>
+    <div class="acct-note">到 <a href="https://api.istero.com" target="_blank" rel="noopener" style="color:#ffd3e8;">istero.com</a> 免费注册拿 Token 填入，约一半视频来自抖音近期热门。留空则不启用。</div>
+  </div>
+</div>
+
+<div id="errMask" class="mask center hidden">
+  <div class="errbox">
+    <h2>连接失败</h2>
+    <p id="errMsg">无法解析视频源，请检查网络或服务状态。</p>
+    <button id="btnRetry" class="retry">重新连接</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ==================== 源配置（十源加权轮换） ==================== */
+  var SOURCES = [
+    { u: "https://api.yujn.cn/api/qingchun.php", name: "青春", w: 3 },
+    { u: "https://api.yujn.cn/api/tianmei.php", name: "甜妹", w: 3 },
+    { u: "https://api.yujn.cn/api/nvda.php", name: "热点", w: 2 },
+    { u: "https://api.yujn.cn/api/rewu.php", name: "热舞", w: 2 },
+    { u: "https://api.yujn.cn/api/jiepai.php", name: "街拍", w: 0 },
+    { u: "https://api.yujn.cn/api/hanfu.php", name: "古装", w: 1 },
+    { u: "https://api.yujn.cn/api/COS.php", name: "COS", w: 1 },
+    { u: "https://api.yujn.cn/api/xjj.php", name: "精选", w: 1 },
+    { u: "https://api.yujn.cn/api/juhexjj.php", name: "合集", w: 1 },
+    { u: "https://api.yujn.cn/api/zzxjj.php", name: "站长", w: 1 }
+  ];
+
+  var TIERS = {
+    "流畅": { n: 1, min: 0 },
+    "均衡": { n: 2, min: 800 },
+    "高清": { n: 3, min: 1100 },
+    "极致": { n: 5, min: 1500 }
+  };
+
+  /* ==================== 本地存储 ==================== */
+  var LS = {
+    get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+    del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
+  };
+
+  var curAcct = LS.get("xjjpro_acct", null);
+  var acctStore = LS.get("xjjpro_accts", {});
+
+  function dk(s) { return "xjjpro_" + s + "_" + (curAcct || "guest"); }
+  var fav = LS.get(dk("fav"), []);
+  var hist = LS.get(dk("hist"), []);
+  var liked = LS.get(dk("liked"), {});
+  var seen = LS.get("xjjpro_seen", []);
+  var srcStats = LS.get("xjjpro_stats", {});
+  var tierKey = LS.get("xjjpro_tier", "高清");
+  var dyToken = LS.get("xjjpro_dytoken", "");
+  var mutedChoice = LS.get("xjjpro_mute", true);
+  var API_KEY = LS.get("xjjpro_key", "");
+
+  function saveFav() { LS.set(dk("fav"), fav); }
+  function saveHist() { LS.set(dk("hist"), hist); }
+  function saveLiked() { LS.set(dk("liked"), liked); }
+
+  function hashPw(pw, salt) {
+    if (window.crypto && crypto.subtle) {
+      return crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + ":" + pw)).then(function (b) {
+        return Array.prototype.map.call(new Uint8Array(b), function (x) { return ("0" + x.toString(16)).slice(-2); }).join("");
+      });
+    }
+    return new Promise(function (res) {
+      var h = 0, s = salt + ":" + pw;
+      for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+      res(("00000000" + (h >>> 0).toString(16)).slice(-8));
+    });
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ==================== 状态 ==================== */
+  var slots = [$("v0"), $("v1"), $("v2")];
+  var shim = $("shim"), spinner = $("spinner"), playBadge = $("playBadge");
+  var progressBar = $("progressBar");
+  var card = $("card");
+
+  var cur = 2;                 // 初始 2：第一次 forward() 走 v0，回看链路自然
+  var seq = 0;
+  var switching = false;
+  var errStreak = 0;
+  var noSrv = false;
+  var curEpn = "", curMeta = null, curUrl = "";
+  var likedCur = false;
+  var slotData = [null, null, null];   // 每槽 { epn, meta }（服务端探测结果）
+  var stallTimer = null;
+  var toastTimer = null;
+
+  function active() { return slots[cur]; }
+  function activeData() { return slotData[cur] || {}; }
+  function nextSlot() { return slots[(cur + 1) % 3]; }
+  function prevSlot() { return slots[(cur + 2) % 3]; }
+
+  /* ==================== 源权重（码率自学习 + 坏源降权） ==================== */
+  function noteQuality(epn, kbps) {
+    if (!epn) return;
+    var s = srcStats[epn] || { ok: 0, fail: 0, kbps: 0 };
+    s.ok += 1;
+    if (kbps) s.kbps = s.kbps ? (s.kbps * 0.6 + kbps * 0.4) : kbps;
+    srcStats[epn] = s;
+    LS.set("xjjpro_stats", srcStats);
+  }
+  function noteFail(epn) {
+    if (!epn) return;
+    var s = srcStats[epn] || { ok: 0, fail: 0, kbps: 0 };
+    s.fail += 1;
+    srcStats[epn] = s;
+    LS.set("xjjpro_stats", srcStats);
+  }
+  function srcWeight(s) {
+    var st = srcStats[s.name];
+    if (!st) return s.w;
+    var total = st.ok + st.fail;
+    if (total >= 5 && st.fail / total > 0.6) return 0;
+    var w = s.w, q = st.kbps || 0;
+    if (q >= 1500) w += 2;
+    else if (q >= 1100) w += 1;
+    else if (q > 0 && q < 700) w -= 1;
+    return Math.max(0, w);
+  }
+  function pickEp() {
+    var live = SOURCES.filter(function (s) { return srcWeight(s) > 0; });
+    if (!live.length) live = SOURCES;
+    var total = live.reduce(function (a, s) { return a + srcWeight(s); }, 0);
+    var r = Math.random() * total;
+    for (var i = 0; i < live.length; i++) { r -= srcWeight(live[i]); if (r <= 0) return live[i]; }
+    return live[live.length - 1];
+  }
+  function pickEps(n) {
+    var out = [];
+    var guard = 0;
+    while (out.length < n && guard++ < 30) {
+      var e = pickEp();
+      if (out.indexOf(e) < 0) out.push(e);
+    }
+    while (out.length < n) out.push(SOURCES[out.length % SOURCES.length]);
+    return out;
+  }
+  function epName(u) {
+    for (var i = 0; i < SOURCES.length; i++) if (SOURCES[i].u === u) return SOURCES[i].name;
+    return "随机";
+  }
+
+  /* ==================== 去重 ==================== */
+  function markSeen(u) {
+    if (!u) return;
+    // 去重：仅记录真正播放过的视频；已存在则移到最前（LRU 语义）
+    var i = seen.indexOf(u);
+    if (i >= 0) seen.splice(i, 1);
+    seen.unshift(u);
+    if (seen.length > 400) seen.length = 400;   // 上限收紧，减少误判循环
+    LS.set("xjjpro_seen", seen);
+  }
+  function isSeen(u) { return seen.indexOf(u) > -1; }
+  function sameAsSlots(u) { return slots.some(function (s) { return s.src === u; }); }
+
+  /* ==================== 槽位应用 ==================== */
+  function apply(slot, url, epn, meta) {
+    slot.src = url;
+    slot.loop = true;
+    // 新填的槽位默认静音（除非它就是即将播放的 active），杜绝串音
+    slot.muted = (slot === active()) ? desiredMute() : true;
+    if (meta && meta.w && meta.h) {
+      if (meta.w > meta.h) slot.classList.add("land"); else slot.classList.remove("land");
+    }
+    slotData[slots.indexOf(slot)] = { epn: epn, meta: meta || null };
+  }
+  function startBuffer(slot) {
+    slot.preload = "auto";
+    if (slot.src) { try { slot.load(); } catch (e) {} }
+  }
+
+  /* ==================== 画质档位 / API ==================== */
+  function curTier() { return TIERS[tierKey] || TIERS["高清"]; }
+  function apiUrl(u) {
+    return API_KEY ? u + (u.indexOf("?") > -1 ? "&" : "?") + "key=" + encodeURIComponent(API_KEY) : u;
+  }
+  function fetchResolve(reqUrl, epn) {
+    if (noSrv) return Promise.resolve(null);
+    return fetch(reqUrl)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok && d.url) return { url: d.url, epn: epn, meta: d.meta || null };
+        return null;
+      })
+      .catch(function () { return null; });
+  }
+  function yujnReq(eps) {
+    var t = curTier();
+    var q = eps.map(function (e) { return "u=" + encodeURIComponent(e.u); }).join("&");
+    return apiUrl("/api/resolve?" + q + "&n=" + t.n + "&min=" + t.min);
+  }
+
+  /* ==================== 解析（Promise 风格 + 版本戳防串槽） ==================== */
+  var stampSeq = 0;
+  function resolveSlot(slot, autoLoad) {
+    // 每次解析打一个递增戳；若解析未返回时槽位被再次征用（戳变了），结果作废
+    var myStamp = ++stampSeq;
+    slot._stamp = myStamp;
+    return new Promise(function (res) {
+      function doneWrap(ok) { res(ok && slot._stamp === myStamp); }
+      if (dyToken && Math.random() < 0.45) {
+        fetchResolve(apiUrl("/api/resolve?src=douyin&token=" + encodeURIComponent(dyToken)), "抖音")
+          .then(function (pick) { pick ? done(slot, autoLoad, pick, myStamp, doneWrap) : yujn(slot, autoLoad, myStamp, doneWrap); });
+        return;
+      }
+      yujn(slot, autoLoad, myStamp, doneWrap);
+    });
+  }
+  function yujn(slot, autoLoad, myStamp, res) {
+    var eps = pickEps(curTier().n);
+    fetchResolve(yujnReq(eps), epName(eps[0].u))
+      .then(function (pick) { done(slot, autoLoad, pick, myStamp, res); });
+  }
+  function done(slot, autoLoad, pick, myStamp, res) {
+    if (!pick || !pick.url) { res(false); return; }
+    if (isSeen(pick.url) || sameAsSlots(pick.url)) {
+      var retry = 0;
+      (function again() {
+        if (retry++ >= 5) { res(false); return; }
+        if (slot._stamp !== myStamp) { res(false); return; }   // 槽位已被征用
+        var e = pickEp();
+        fetchResolve(yujnReq([e]), e.name).then(function (p2) {
+          if (slot._stamp !== myStamp) { res(false); return; }
+          if (p2 && p2.url && !isSeen(p2.url) && !sameAsSlots(p2.url)) {
+            finalize(slot, autoLoad, p2, myStamp, res);
+          } else again();
+        });
+      })();
+      return;
+    }
+    finalize(slot, autoLoad, pick, myStamp, res);
+  }
+  function finalize(slot, autoLoad, pick, myStamp, res) {
+    if (slot._stamp !== myStamp) { res(false); return; }       // 槽位已被征用，丢弃结果
+    // 预载（非播放）时若直链与当前任一槽位重复，直接放弃本次预载
+    if (!autoLoad && sameAsSlots(pick.url)) { res(true); return; }
+    apply(slot, pick.url, pick.epn, pick.meta);
+    if (autoLoad) startBuffer(slot);
+    else slot.preload = "none";
+    // 注意：这里不 markSeen —— 只有真正开始播放时才记录，
+    // 避免“预载的下一条”被误记为“已看过”，导致切换时反复命中同一批。
+    if (pick.meta && pick.meta.kbps) noteQuality(pick.epn, pick.meta.kbps);
+    res(true);
+  }
+
+  /* ==================== UI 基础 ==================== */
+  function toastMsg(msg, ms) {
+    var t = $("toast");
+    t.textContent = msg;
+    t.classList.add("on");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove("on"); }, ms || 2200);
+  }
+  function desiredMute() { return mutedChoice === null ? true : !!mutedChoice; }
+  function updateMuteIcon() {
+    $("icoMuted").classList.toggle("hidden", !desiredMute());
+    $("icoSound").classList.toggle("hidden", desiredMute());
+    // 关键：只有当前播放的槽位按用户选择发声，其余槽位（后台/预载）一律强制静音，
+    // 否则三个 <video> 同时出声造成“音杂乱”。
+    slots.forEach(function (s) { s.muted = (s === active()) ? desiredMute() : true; });
+  }
+  function show(el) {
+    slots.forEach(function (s) { s.classList.toggle("off", s !== el); });
+    // 切换后立即暂停所有非 active 槽位：否则旧视频继续发声/耗带宽，
+    // 两个视频同时出声正是“音杂乱”的根源
+    syncPlaying();
+  }
+  function syncPlaying() {
+    slots.forEach(function (s) {
+      if (s !== active() && !s.paused) { try { s.pause(); } catch (e) {} }
+    });
+  }
+  function animateIn(el) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { el.classList.remove("pre"); });
+    });
+  }
+  function tryPlay() {
+    var a = active();
+    a.muted = desiredMute();
+    var p = a.play();
+    if (p && p.catch) p.catch(function () {
+      // 自动播放被拦截（通常因非静音），静音重试，但只针对 active 槽位
+      a.muted = true;
+      var p2 = a.play();
+      if (p2 && p2.catch) p2.catch(function () { playBadge.classList.remove("hidden"); });
+      else { /* 静音重试成功，但用户仍视为“已静音” */ }
+    });
+  }
+
+  /* ==================== 元数据展示 ==================== */
+  function fmtKbps(kb) { return kb >= 1000 ? (kb / 1000).toFixed(1) + "M" : kb + "k"; }
+  function updateMeta() {
+    var d = activeData();
+    var meta = d.meta || null;
+    var el = active();
+    var parts = ['<span>' + (d.epn || "随机") + '源 · 抖音快手精选</span>'];
+    var w = el.videoWidth || (meta && meta.w), h = el.videoHeight || (meta && meta.h);
+    if (w && h) {
+      parts.push('<span class="badge">' + w + '×' + h + '</span>');
+      $("hdTag").classList.toggle("hidden", h < 720);
+    } else {
+      $("hdTag").classList.add("hidden");
+    }
+    var dur = el.duration && isFinite(el.duration) ? el.duration : (meta && meta.dur);
+    if (dur) parts.push('<span class="badge">' + Math.round(dur) + 's</span>');
+    if (meta && meta.kbps) parts.push('<span class="badge q">' + fmtKbps(meta.kbps) + ' kbps</span>');
+    $("vMeta").innerHTML = parts.join("");
+  }
+
+  /* ==================== 停顿守卫 ==================== */
+  function armStallGuard() {
+    clearStallGuard();
+    stallTimer = setTimeout(function () { forward(); }, 8000);
+  }
+  function clearStallGuard() {
+    if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
+  }
+
+  /* ==================== 错误处理 ==================== */
+  function handleError() {
+    noteFail(curEpn || "随机");
+    errStreak++;
+    if (errStreak >= 3) { showErr(); return; }
+    setTimeout(function () { forward(); }, 400);
+  }
+  function showErr() {
+    spinner.classList.add("hidden");
+    shim.classList.add("hidden");
+    $("errMsg").textContent = noSrv
+      ? "未检测到本地服务。直接打开文件仅能预览；收藏/下载/择优需运行 server.py。"
+      : "连续多次解析失败，请检查网络后重试。";
+    $("errMask").classList.remove("hidden");
+  }
+
+  /* ==================== 历史 / 点赞 / 收藏 / 下载 ==================== */
+  function histRecord() {
+    var d = activeData();
+    hist.unshift({ u: active().src, epn: d.epn, meta: d.meta, t: Date.now() });
+    if (hist.length > 100) hist.length = 100;
+    saveHist();
+    $("watchCount").textContent = "已看 " + hist.length;
+  }
+  function updateLikeUI() {
+    var on = likedCur || (curUrl && liked[curUrl]);
+    $("railLike").classList.toggle("liked", !!on);
+    $("tbLike").classList.toggle("on", !!on);
+  }
+  function floatHeart(x, y) {
+    var h = document.createElement("span");
+    h.className = "float-heart";
+    h.innerHTML = '<svg width="34" height="34" viewBox="0 0 24 24" fill="#ff5e9c"><path d="M12 21s-7.5-4.9-10-9.2C.4 8.6 2 5 5.5 5c2 0 3.4 1.1 4.2 2.4L12 10l2.3-2.6C15.1 6.1 16.5 5 18.5 5 22 5 23.6 8.6 22 11.8 19.5 16.1 12 21 12 21z"/></svg>';
+    h.style.left = (x - 17) + "px";
+    h.style.top = (y - 17) + "px";
+    card.appendChild(h);
+    setTimeout(function () { h.remove(); }, 1100);
+  }
+  function doLike(e) {
+    if (!curUrl) return;
+    likedCur = !likedCur;
+    if (likedCur) liked[curUrl] = true; else delete liked[curUrl];
+    saveLiked();
+    updateLikeUI();
+    if (e && e.clientX) {
+      var r = card.getBoundingClientRect();
+      floatHeart(e.clientX - r.left, e.clientY - r.top);
+    } else {
+      var r2 = card.getBoundingClientRect();
+      floatHeart(r2.width / 2, r2.height / 2);
+    }
+  }
+  function doFav() {
+    if (!curUrl) { toastMsg("还没加载出视频"); return; }
+    for (var i = 0; i < fav.length; i++) if (fav[i].u === curUrl) { toastMsg("已在收藏中"); return; }
+    var d = activeData();
+    fav.unshift({ u: curUrl, epn: d.epn, meta: d.meta, t: Date.now() });
+    saveFav();
+    var rf = $("railFav");
+    rf.classList.add("faved");
+    setTimeout(function () { rf.classList.remove("faved"); }, 800);
+    toastMsg("已收藏 ❤");
+  }
+  function doDownload() {
+    if (!curUrl) { toastMsg("还没加载出视频"); return; }
+    var a = document.createElement("a");
+    a.href = curUrl;
+    a.download = "小姐姐视频_" + new Date().toISOString().slice(0, 10) + ".mp4";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toastMsg("开始下载…");
+  }
+
+  /* ==================== 切换核心 ==================== */
+  function beginSwitch(showLoading) {
+    if (switching) return false;
+    switching = true;
+    setTimeout(function () { switching = false; }, 260);
+    if (showLoading) {
+      spinner.classList.remove("hidden");
+      shim.classList.remove("hidden");
+    }
+    return true;
+  }
+
+  function forward() {
+    if (switching) return;
+    if (!beginSwitch(true)) return;
+    var nx = nextSlot();
+    var wasActive = active();
+    var wasIdx = cur;
+    seq++;
+    $("seqTag").textContent = "#" + seq;
+    likedCur = false;
+    cur = (cur + 1) % 3;
+    show(nx);
+    nx.classList.add("pre");
+    progressBar.style.transform = "scaleX(0)";
+    curEpn = ""; curMeta = null; curUrl = "";
+    $("vMeta").innerHTML = '<span>解析中…</span>';
+
+    if (nx.src && nx.src !== wasActive.src) {
+      // 预载已完成且与当前播放不重复 → 直接播放
+      startBuffer(nx);
+      activate(nx);
+      animateIn(nx);
+      if (wasActive.src && wasIdx !== cur) histRecordFor(wasIdx);
+    } else if (nx._pending) {
+      // 预载解析进行中（快速连点场景）→ 等它完成，而不是用旧 src
+      nx._pending.then(function (ok) {
+        if (nx !== active()) return;
+        if (ok && nx.src && nx.src !== wasActive.src) {
+          startBuffer(nx); activate(nx); animateIn(nx);
+          if (wasActive.src && wasIdx !== cur) histRecordFor(wasIdx);
+        } else {
+          // 预载失败或结果重复 → 当场重新解析
+          resolveSlot(nx, true).then(function (ok2) {
+            if (nx !== active()) return;
+            if (ok2) { activate(nx); animateIn(nx); }
+            else handleError();
+          });
+        }
+      });
+    } else {
+      // 槽位为空 → 当场解析
+      resolveSlot(nx, true).then(function (ok) {
+        if (nx !== active()) return;   // 用户已切走，丢弃
+        if (ok) { activate(nx); animateIn(nx); }
+        else handleError();
+      });
+    }
+    schedulePreload();
+    updateMuteIcon();
+    updateLikeUI();
+  }
+
+  function activate(el) {
+    var i = slots.indexOf(el);
+    var d = slotData[i] || {};
+    curEpn = d.epn || "随机";
+    curMeta = d.meta || null;
+    curUrl = el.src;
+    markSeen(el.src);            // 真正播放时记录去重
+    updateMeta();
+    tryPlay();
+  }
+
+  function histRecordFor(idx) {
+    var d = slotData[idx];
+    if (!d || !slots[idx].src) return;
+    hist.unshift({ u: slots[idx].src, epn: d.epn, meta: d.meta, t: Date.now() });
+    if (hist.length > 100) hist.length = 100;
+    saveHist();
+    $("watchCount").textContent = "已看 " + hist.length;
+  }
+
+  function backward() {
+    if (switching) return;
+    var pv = prevSlot();
+    if (!pv.src) { toastMsg("没有更早的记录啦"); return; }
+    beginSwitch(false);
+    var from = cur;
+    cur = (cur + 2) % 3;
+    show(pv);
+    pv.classList.add("pre");
+    animateIn(pv);
+    spinner.classList.add("hidden");
+    shim.classList.add("hidden");
+    activate(pv);
+    if (pv._lastTime && isFinite(pv._lastTime)) {
+      try { pv.currentTime = pv._lastTime; } catch (e) {}
+    }
+    tryPlay();
+    schedulePreload();
+    updateLikeUI();
+  }
+
+  function schedulePreload() {
+    var nx = nextSlot();
+    // 关键：无论该槽位有没有旧内容，都清空并重新预载一条新视频。
+    // 轮转一圈后这个槽位存的是“上上一条”，回看价值已过期（回看位在 prevSlot），
+    // 不复用旧 src —— 这是打破“仅有三个视频循环”的核心。
+    var idx = slots.indexOf(nx);
+    nx._lastTime = 0;
+    slotData[idx] = null;
+    if (nx.src) {
+      try { nx.pause(); } catch (e) {}
+      nx.removeAttribute("src");
+      try { nx.load(); } catch (e) {}      // 释放旧资源
+    }
+    nx._pending = resolveSlot(nx, false).then(function (ok) {
+      nx._pending = null;
+      return ok;
+    });
+  }
+
+  /* ==================== 视频事件 ==================== */
+  slots.forEach(function (el) {
+    el.addEventListener("loadedmetadata", function () {
+      if (el === active()) updateMeta();
+    });
+    el.addEventListener("canplay", function () {
+      if (el !== active()) return;
+      spinner.classList.add("hidden");
+      shim.classList.add("hidden");
+      errStreak = 0;
+    });
+    el.addEventListener("playing", function () {
+      if (el !== active()) return;
+      clearStallGuard();
+      spinner.classList.add("hidden");
+      shim.classList.add("hidden");
+      playBadge.classList.add("hidden");
+      document.body.classList.add("playing");
+    });
+    el.addEventListener("timeupdate", function () {
+      el._lastTime = el.currentTime;
+      if (el === active() && el.duration && isFinite(el.duration)) {
+        progressBar.style.transform = "scaleX(" + (el.currentTime / el.duration).toFixed(4) + ")";
+      }
+    });
+    el.addEventListener("pause", function () {
+      if (el === active() && !el.ended) {
+        playBadge.classList.remove("hidden");
+        document.body.classList.remove("playing");
+      }
+    });
+    el.addEventListener("play", function () {
+      if (el === active()) playBadge.classList.add("hidden");
+    });
+    el.addEventListener("error", function () {
+      if (el === active() && el.src) handleError();
+    });
+    el.addEventListener("waiting", function () {
+      if (el === active()) armStallGuard();
+    });
+  });
+
+  /* ==================== 面板：收藏 / 历史 ==================== */
+  var panelKind = "fav";
+  function openList(kind) {
+    panelKind = kind;
+    $("tabFav").classList.toggle("on", kind === "fav");
+    $("tabHist").classList.toggle("on", kind === "hist");
+    renderList();
+    $("listMask").classList.remove("hidden");
+  }
+  function renderList() {
+    var data = panelKind === "fav" ? fav : hist;
+    var body = $("listBody");
+    $("listClear").classList.toggle("hidden", !data.length);
+    $("listHint").textContent = (panelKind === "fav" ? "收藏 " : "历史 ") + data.length + " 条";
+    if (!data.length) {
+      body.innerHTML = '<div class="empty">' + (panelKind === "fav"
+        ? "还没有收藏<br>看到喜欢的小姐姐，点右侧「收藏」按钮"
+        : "还没有观看记录") + "</div>";
+      return;
+    }
+    body.innerHTML = data.map(function (e, i) {
+      var l2 = [];
+      if (e.meta && e.meta.w) l2.push(e.meta.w + "×" + e.meta.h);
+      if (e.meta && e.meta.dur) l2.push(Math.round(e.meta.dur) + "s");
+      if (e.meta && e.meta.kbps) l2.push(e.meta.kbps + "k");
+      var ops = '<a data-act="play" data-i="' + i + '">播放</a>';
+      if (e.u) ops += '<a data-act="open" data-i="' + i + '" target="_blank">直链</a>';
+      ops += '<button data-act="del" data-i="' + i + '" class="del">' + (panelKind === "fav" ? "取消收藏" : "删除") + "</button>";
+      return '<div class="item" data-i="' + i + '">' +
+        (e.u ? '<video class="th" src="' + e.u + '" preload="metadata" muted></video>' : '<div class="th"></div>') +
+        '<div class="meta"><div class="l1">' + (e.epn || "随机") + ' · ' + new Date(e.t).toLocaleString() + '</div>' +
+        '<div class="l2">' + (l2.join(" · ") || "视频信息缺失") + '</div>' +
+        '<div class="ops">' + ops + '</div></div></div>';
+    }).join("");
+  }
+
+  /* ==================== 面板：账号 ==================== */
+  function renderAcct() {
+    var loggedIn = !!curAcct;
+    $("acctLoggedIn").classList.toggle("hidden", !loggedIn);
+    $("acctLoggedOut").classList.toggle("hidden", loggedIn);
+    if (loggedIn) $("acctWho").textContent = curAcct;
+    $("acctChip").textContent = loggedIn ? "👤 " + curAcct : "🔒 未登录";
+    var row = $("qtierRow");
+    row.innerHTML = Object.keys(TIERS).map(function (k) {
+      return '<button class="acct-pill' + (k === tierKey ? " on" : "") + '" data-tier="' + k + '">' + k + "</button>";
+    }).join("");
+    $("dyToken").value = dyToken || "";
+  }
+  function switchAccount(id) {
+    curAcct = id;
+    LS.set("xjjpro_acct", id);
+    fav = LS.get(dk("fav"), []);
+    hist = LS.get(dk("hist"), []);
+    liked = LS.get(dk("liked"), {});
+    renderAcct();
+    updateLikeUI();
+    $("watchCount").textContent = "已看 " + hist.length;
+  }
+
+  /* ==================== 播放指定条目（收藏/历史回放） ==================== */
+  function playEntry(e) {
+    $("listMask").classList.add("hidden");
+    if (!e || !e.u) return;
+    var el = active();
+    seq++;
+    $("seqTag").textContent = "#" + seq;
+    apply(el, e.u, e.epn, e.meta);
+    startBuffer(el);
+    curEpn = e.epn || "随机";
+    curMeta = e.meta || null;
+    curUrl = e.u;
+    spinner.classList.remove("hidden");
+    shim.classList.remove("hidden");
+    el.classList.add("pre");
+    animateIn(el);
+    markSeen(e.u);
+    updateMeta();
+    tryPlay();
+    updateLikeUI();
+  }
+
+  /* ==================== 帧率守护 ==================== */
+  var dropCount = 0, lastFrame = 0;
+  function guardFrame(now) {
+    if (lastFrame) {
+      var gap = now - lastFrame;
+      if (gap > 80) dropCount++;
+      else dropCount = Math.max(0, dropCount - 1);
+      if (dropCount > 8) document.body.classList.add("lite");
+    }
+    lastFrame = now;
+    requestAnimationFrame(guardFrame);
+  }
+
+  /* ==================== 事件绑定 ==================== */
+  function bindEvents() {
+    $("tbNext").addEventListener("click", forward);
+    $("tbPrev").addEventListener("click", backward);
+    $("tbLike").addEventListener("click", doLike);
+    $("railLike").addEventListener("click", doLike);
+    $("tbFav").addEventListener("click", doFav);
+    $("railFav").addEventListener("click", doFav);
+    $("tbDl").addEventListener("click", doDownload);
+    $("railDl").addEventListener("click", doDownload);
+    $("tbHist").addEventListener("click", function () { openList("hist"); });
+    $("acctChip").addEventListener("click", function () { renderAcct(); $("acctMask").classList.remove("hidden"); });
+
+    $("listClose").addEventListener("click", function () { $("listMask").classList.add("hidden"); });
+    $("acctClose").addEventListener("click", function () { $("acctMask").classList.add("hidden"); });
+    $("tabFav").addEventListener("click", function () { openList("fav"); });
+    $("tabHist").addEventListener("click", function () { openList("hist"); });
+    $("btnRetry").addEventListener("click", function () {
+      $("errMask").classList.add("hidden");
+      errStreak = 0;
+      forward();
+    });
+
+    $("listClear").addEventListener("click", function () {
+      if (panelKind === "fav") { fav = []; saveFav(); }
+      else { hist = []; saveHist(); $("watchCount").textContent = "已看 0"; }
+      renderList();
+    });
+
+    $("listBody").addEventListener("click", function (ev) {
+      var t = ev.target;
+      var act = t.getAttribute && t.getAttribute("data-act");
+      var item = t.closest ? t.closest(".item") : null;
+      if (!item) return;
+      var i = parseInt(item.getAttribute("data-i"), 10);
+      var data = panelKind === "fav" ? fav : hist;
+      var e = data[i];
+      if (!e) return;
+      if (act === "del") {
+        if (panelKind === "fav") { fav.splice(i, 1); saveFav(); }
+        else { hist.splice(i, 1); saveHist(); $("watchCount").textContent = "已看 " + hist.length; }
+        renderList();
+      } else if (act === "open" && e.u) {
+        window.open(e.u, "_blank");
+      } else {
+        playEntry(e);
+      }
+    });
+
+    /* 账号 */
+    $("btnLogin").addEventListener("click", function () {
+      var id = $("acctId").value.trim(), pw = $("acctPw").value;
+      if (id.length < 2 || id.length > 16) { $("acctMsg").textContent = "账号需 2-16 位"; return; }
+      if (pw.length < 4) { $("acctMsg").textContent = "密码至少 4 位"; return; }
+      var rec = acctStore[id];
+      if (!rec) { $("acctMsg").textContent = "账号不存在，请先注册"; return; }
+      hashPw(pw, id).then(function (h) {
+        if (h !== rec.h) { $("acctMsg").textContent = "密码错误"; return; }
+        $("acctMsg").textContent = "";
+        $("acctMask").classList.add("hidden");
+        switchAccount(id);
+        toastMsg("欢迎回来，" + id);
+      });
+    });
+    $("btnReg").addEventListener("click", function () {
+      var id = $("acctId").value.trim(), pw = $("acctPw").value;
+      if (id.length < 2 || id.length > 16) { $("acctMsg").textContent = "账号需 2-16 位"; return; }
+      if (pw.length < 4) { $("acctMsg").textContent = "密码至少 4 位"; return; }
+      if (acctStore[id]) { $("acctMsg").textContent = "账号已存在，请直接登录"; return; }
+      hashPw(pw, id).then(function (h) {
+        acctStore[id] = { h: h, c: Date.now() };
+        LS.set("xjjpro_accts", acctStore);
+        $("acctMsg").textContent = "";
+        $("acctMask").classList.add("hidden");
+        switchAccount(id);
+        toastMsg("注册成功，欢迎 " + id);
+      });
+    });
+    $("btnLogout").addEventListener("click", function () {
+      switchAccount(null);
+      $("acctMask").classList.add("hidden");
+      toastMsg("已退出登录");
+    });
+
+    $("qtierRow").addEventListener("click", function (ev) {
+      var tier = ev.target.getAttribute && ev.target.getAttribute("data-tier");
+      if (!tier) return;
+      tierKey = tier;
+      LS.set("xjjpro_tier", tier);
+      renderAcct();
+      toastMsg("已切换为「" + tier + "」档位");
+    });
+    $("dyTokSave").addEventListener("click", function () {
+      dyToken = $("dyToken").value.trim();
+      LS.set("xjjpro_dytoken", dyToken);
+      toastMsg(dyToken ? "抖音源已启用" : "抖音源已关闭");
+    });
+
+    $("btnMute").addEventListener("click", function () {
+      mutedChoice = !desiredMute();
+      LS.set("xjjpro_mute", mutedChoice);
+      updateMuteIcon();
+      if (!desiredMute()) tryPlay();
+    });
+
+    /* 卡片点击：暂停/播放；双击点赞 */
+    var clickTimer = null;
+    card.addEventListener("click", function (e) {
+      if (e.target.closest && (e.target.closest(".rail") || e.target.closest(".icon-btn") || e.target.closest(".edge-top"))) return;
+      if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }   // 双击的第二次 click
+      clickTimer = setTimeout(function () {
+        clickTimer = null;
+        var a = active();
+        if (a.paused) tryPlay(); else a.pause();
+      }, 240);
+    });
+    card.addEventListener("dblclick", function (e) {
+      doLike(e);
+    });
+
+    /* 进度条 seek */
+    $("progressWrap").addEventListener("click", function (e) {
+      var el = active();
+      if (!el.duration || !isFinite(el.duration)) return;
+      var r = this.getBoundingClientRect();
+      var pct = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      try { el.currentTime = el.duration * pct; } catch (err) {}
+    });
+
+    /* 滚轮切换 */
+    var wheelLock = 0;
+    document.addEventListener("wheel", function (e) {
+      var now = Date.now();
+      if (now - wheelLock < 500) return;
+      if (Math.abs(e.deltaY) < 25) return;
+      wheelLock = now;
+      if (e.deltaY > 0) forward(); else backward();
+    }, { passive: true });
+
+    /* 触摸滑动切换（仅卡片区域，避免干扰面板滚动） */
+    var touchY = 0, touchX = 0, touchT = 0;
+    card.addEventListener("touchstart", function (e) {
+      if (e.touches.length !== 1) return;
+      touchY = e.touches[0].clientY;
+      touchX = e.touches[0].clientX;
+      touchT = Date.now();
+    }, { passive: true });
+    card.addEventListener("touchend", function (e) {
+      if (!touchT) return;
+      var dy = e.changedTouches[0].clientY - touchY;
+      var dx = e.changedTouches[0].clientX - touchX;
+      var dt = Date.now() - touchT;
+      touchT = 0;
+      if (dt > 600 || Math.abs(dy) < 60 || Math.abs(dx) > Math.abs(dy)) return;
+      if (dy < 0) forward(); else backward();
+    }, { passive: true });
+
+    /* 键盘 */
+    document.addEventListener("keydown", function (e) {
+      if (e.target.tagName === "INPUT") return;
+      switch (e.key) {
+        case "ArrowUp": e.preventDefault(); forward(); break;
+        case "ArrowDown": e.preventDefault(); backward(); break;
+        case " ": e.preventDefault(); { var a = active(); a.paused ? tryPlay() : a.pause(); } break;
+        case "r": case "R": forward(); break;
+        case "m": case "M": mutedChoice = !desiredMute(); LS.set("xjjpro_mute", mutedChoice); updateMuteIcon(); if (!desiredMute()) tryPlay(); break;
+        case "l": case "L": doLike(); break;
+        case "f": case "F": doFav(); break;
+        case "d": case "D": doDownload(); break;
+        case "h": case "H": openList("hist"); break;
+      }
+    });
+
+    /* 遮罩点击关闭 */
+    $("listMask").addEventListener("click", function (e) { if (e.target === this) this.classList.add("hidden"); });
+    $("acctMask").addEventListener("click", function (e) { if (e.target === this) this.classList.add("hidden"); });
+  }
+
+  /* ==================== 初始化 ==================== */
+  function init() {
+    bindEvents();
+    renderAcct();
+    updateMuteIcon();
+    $("watchCount").textContent = "已看 " + hist.length;
+    updateLikeUI();
+    requestAnimationFrame(guardFrame);
+
+    fetch(apiUrl("/api/health"))
+      .then(function (r) { return r.json(); })
+      .then(function (d) { noSrv = !(d && d.ok); })
+      .catch(function () { noSrv = true; });
+
+    forward();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

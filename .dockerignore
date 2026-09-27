@@ -1,0 +1,6 @@
+.git
+__pycache__
+*.pyc
+.gitignore
+DEPLOY.md
+启动网站.bat

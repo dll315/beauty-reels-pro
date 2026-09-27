@@ -1,0 +1,12 @@
+services:
+  girl-pro:
+    build: .
+    container_name: girl-pro
+    ports:
+      - "8899:8899"
+    environment:
+      - PORT=8899
+      # - ACCESS_TOKEN=你的口令   # 公网部署建议设置，前端也需填对应 key
+      # - CANDIDATES=3            # 并发候选数
+      # - MIN_KBPS=1100           # 最低码率门槛
+    restart: unless-stopped
